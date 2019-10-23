@@ -7,3 +7,5 @@ Bapro(back prometheus) provides following feature.
 
 - https://prometheus.io/docs/prometheus/latest/querying/api/#snapshot
 - https://prometheus.io/docs/prometheus/latest/storage/
+- https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/prometheus
+- https://github.com/nginxinc/kubernetes-ingress/blob/master/docs/installation.md
