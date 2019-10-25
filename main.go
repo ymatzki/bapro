@@ -9,6 +9,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"os"
+	"sort"
+)
+
+const (
+	generation = 3
 )
 
 type AwsConfig struct {
@@ -27,8 +32,15 @@ func main() {
 		os.Getenv("AWS_DEFAULT_REGION"),
 		os.Getenv("AWS_DEFAULT_BUCKET"),
 	}
-	//upload("test.txt", awsConfig)
-	list(awsConfig)
+
+	//upload("1572011713.txt", awsConfig)
+	targets, err := list(awsConfig)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	delete(listDeleteTargets(targets), awsConfig)
 }
 
 func createCredentials(config *AwsConfig) (cred *credentials.Credentials) {
@@ -67,35 +79,50 @@ func upload(filename string, config *AwsConfig) error {
 	return nil
 }
 
-func delete(filename string, config *AwsConfig) error {
+func delete(targets []*s3.Object, config *AwsConfig) error {
 
-	//sess := session.Must(session.NewSession(&aws.Config{
-	//	Credentials: createCredentials(config),
-	//	Region:      aws.String(config.Region),
-	//}))
+	svc := s3.New(session.New(&aws.Config{
+		Credentials: createCredentials(config),
+		Region:      aws.String(config.Region),
+	}))
 
-	//uploader := s3manager.NewUploader(sess)
-	//
-	//f, err := os.Open(filename)
-	//if err != nil {
-	//	return fmt.Errorf("failed to open file %q, %v", filename, err)
-	//}
-	//
-	//result, err := uploader.Upload(&s3manager.UploadInput{
-	//	Bucket: aws.String(config.Bucket),
-	//	Key:    aws.String(filename),
-	//	Body:   f,
-	//})
-	//
-	//if err != nil {
-	//	return fmt.Errorf("failed to upload file, %v", err)
-	//}
-	//
-	//fmt.Printf("file uploaded to %s\n", aws.StringValue(&result.Location))
+	var o []*s3.ObjectIdentifier
+	for _, v := range targets {
+		o = append(o, &s3.ObjectIdentifier{Key: v.Key})
+	}
+
+	input := &s3.DeleteObjectsInput{
+		Bucket: aws.String(config.Bucket),
+		Delete: &s3.Delete{
+			Objects: o,
+			Quiet:   aws.Bool(false),
+		},
+	}
+
+	result, err := svc.DeleteObjects(input)
+	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			switch aerr.Code(){
+			default:
+				fmt.Errorf(aerr.Error())
+			}
+		}
+		return fmt.Errorf(err.Error())
+	}
+
+	fmt.Println(result)
 	return nil
 }
 
-func list(config *AwsConfig) error {
+func listDeleteTargets(contents []*s3.Object) (targets []*s3.Object) {
+	sort.Slice(contents[:], func(i, j int) bool {
+		return contents[i].LastModified.Local().After(contents[j].LastModified.Local())
+	})
+
+	return contents[generation:len(contents)]
+}
+
+func list(config *AwsConfig) (contents []*s3.Object, err error) {
 
 	svc := s3.New(session.New(&aws.Config{
 		Credentials: createCredentials(config),
@@ -106,20 +133,18 @@ func list(config *AwsConfig) error {
 		Bucket: aws.String(config.Bucket),
 	}
 
-	reuslt, err := svc.ListObjects(input)
+	result, err := svc.ListObjects(input)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			switch aerr.Code() {
 			case s3.ErrCodeNoSuchBucket:
-				return fmt.Errorf(s3.ErrCodeNoSuchBucket, aerr.Error())
+				return nil, fmt.Errorf(s3.ErrCodeNoSuchBucket, aerr.Error())
 			default:
-				return fmt.Errorf(aerr.Error())
+				return nil, fmt.Errorf(aerr.Error())
 			}
 		}
-		return fmt.Errorf(err.Error())
+		return nil, fmt.Errorf(err.Error())
 	}
 
-	fmt.Println(reuslt)
-
-	return nil
+	return result.Contents, nil
 }
