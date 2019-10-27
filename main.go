@@ -9,7 +9,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"os"
+	"os/signal"
 	"sort"
+	"syscall"
+	"time"
 )
 
 const (
@@ -25,6 +28,18 @@ type AwsConfig struct {
 }
 
 func main() {
+
+	sigs := make(chan os.Signal, 1)
+	done := make(chan bool, 1)
+
+	go gracefulShutdown(sigs, done)
+	go checkPath("/tmp/path")
+
+	fmt.Println("Start Bapro")
+	<-done
+
+	/**
+	* TODO: Delete comment out after implement function to export snapshot
 	awsConfig := &AwsConfig{
 		os.Getenv("AWS_ACCESS_KEY_ID"),
 		os.Getenv("AWS_SECRET_ACCESS_KEY"),
@@ -34,7 +49,7 @@ func main() {
 	}
 
 	// Upload snapshot
-	//upload("1572011713.txt", awsConfig)
+	upload("1572011713.txt", awsConfig)
 
 	// Delete old snapshot
 	targets, err := list(awsConfig)
@@ -50,10 +65,38 @@ func main() {
 		return
 	}
 	delete(deleteTargets, awsConfig)
+	*/
+
 }
 
 // TODO: implement function to export snapshot
 // TODO: implement function import snapshot
+
+func gracefulShutdown(sigs chan os.Signal, done chan bool) {
+	signal.Notify(sigs, syscall.SIGTERM)
+	sig := <-sigs
+	switch sig.String() {
+	case syscall.SIGTERM.String():
+		// TODO: handle SIGTERM
+		fmt.Println("graceful shutdown...")
+		time.Sleep(5 * time.Second)
+	}
+	fmt.Printf("Get signal: %s\n", sig.String())
+	done <- true
+}
+
+func checkPath(path string) {
+	for {
+		time.Sleep(time.Second)
+		_, err := os.Stat(path)
+		if err == nil {
+			fmt.Println("Directory or file [%s] exits.", path)
+		}
+		if os.IsNotExist(err) {
+			fmt.Println("Directory or file [%s] dose Not exits.", path)
+		}
+	}
+}
 
 //----  AWS S3  ----
 
