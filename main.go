@@ -69,7 +69,6 @@ func main() {
 
 }
 
-// TODO: implement function to export snapshot
 // TODO: implement function import snapshot
 
 func gracefulShutdown(sigs chan os.Signal, done chan bool) {
@@ -77,8 +76,8 @@ func gracefulShutdown(sigs chan os.Signal, done chan bool) {
 	sig := <-sigs
 	switch sig.String() {
 	case syscall.SIGTERM.String():
-		// TODO: handle SIGTERM
 		fmt.Println("graceful shutdown...")
+		// TODO: decide appropriate sleep second
 		time.Sleep(5 * time.Second)
 	}
 	fmt.Printf("Get signal: %s\n", sig.String())
@@ -90,10 +89,8 @@ func checkPath(path string) {
 		time.Sleep(time.Second)
 		_, err := os.Stat(path)
 		if err == nil {
-			fmt.Println("Directory or file [%s] exits.", path)
-		}
-		if os.IsNotExist(err) {
-			fmt.Println("Directory or file [%s] dose Not exits.", path)
+			// TODO: export snapshot
+			fmt.Printf("Directory or file [%s] exits.\n", path)
 		}
 	}
 }
