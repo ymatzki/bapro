@@ -29,6 +29,8 @@ type AwsConfig struct {
 
 func main() {
 
+	/**
+	* TODO: Delete comment out afeter implement function to compress directory
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
 
@@ -37,6 +39,7 @@ func main() {
 
 	fmt.Println("Start Bapro")
 	<-done
+	*/
 
 	/**
 	* TODO: Delete comment out after implement function to export snapshot
@@ -66,7 +69,6 @@ func main() {
 	}
 	delete(deleteTargets, awsConfig)
 	*/
-
 }
 
 // TODO: implement function import snapshot
@@ -93,6 +95,14 @@ func checkPath(path string) {
 			fmt.Printf("Directory or file [%s] exits.\n", path)
 		}
 	}
+}
+
+func compress(dir string, file string) (err error) {
+	return
+}
+
+func uncompress() {
+	// TODO: implement
 }
 
 //----  AWS S3  ----
@@ -133,10 +143,16 @@ func upload(filename string, config *AwsConfig) error {
 }
 
 func delete(targets []*s3.Object, config *AwsConfig) error {
-	svc := s3.New(session.New(&aws.Config{
+
+	sess, err := session.NewSession(&aws.Config{
 		Credentials: createCredentials(config),
 		Region:      aws.String(config.Region),
-	}))
+	})
+	if err != nil {
+		return fmt.Errorf(err.Error())
+	}
+
+	svc := s3.New(sess)
 	var o []*s3.ObjectIdentifier
 	for _, v := range targets {
 		o = append(o, &s3.ObjectIdentifier{Key: v.Key})
@@ -172,10 +188,15 @@ func listDeleteTargets(contents []*s3.Object) (targets []*s3.Object) {
 }
 
 func list(config *AwsConfig) (contents []*s3.Object, err error) {
-	svc := s3.New(session.New(&aws.Config{
+	sess, err := session.NewSession(&aws.Config{
 		Credentials: createCredentials(config),
 		Region:      aws.String(config.Region),
-	}))
+	})
+	if err != nil {
+		return nil, fmt.Errorf(err.Error())
+	}
+
+	svc := s3.New(sess)
 
 	input := &s3.ListObjectsInput{
 		Bucket: aws.String(config.Bucket),
