@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -8,8 +9,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"syscall"
 	"time"
@@ -28,6 +31,8 @@ type AwsConfig struct {
 }
 
 func main() {
+
+	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/bbb.zip")
 
 	/**
 	* TODO: Delete comment out afeter implement function to compress directory
@@ -98,6 +103,55 @@ func checkPath(path string) {
 }
 
 func compress(dir string, file string) (err error) {
+	zf, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	defer zf.Close()
+
+	archive := zip.NewWriter(zf)
+	defer archive.Close()
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not directory.", dir)
+	}
+
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+
+		if err != nil {
+			return err
+		}
+
+		header, err := zip.FileInfoHeader(info)
+		if err != nil {
+			return err
+		}
+
+		header.Name = info.Name()
+		header.Method = zip.Deflate
+
+		w, err := archive.CreateHeader(header)
+		if err != nil {
+			return err
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		_, err = io.Copy(w, f)
+		return err
+	})
 	return
 }
 
