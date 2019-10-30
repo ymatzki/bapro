@@ -1,7 +1,9 @@
 package main
 
 import (
-	"archive/zip"
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -32,7 +34,7 @@ type AwsConfig struct {
 
 func main() {
 
-	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/bbb.zip")
+	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/ccc.tar.gz")
 
 	/**
 	* TODO: Delete comment out afeter implement function to compress directory
@@ -108,9 +110,10 @@ func compress(dir string, file string) (err error) {
 		return err
 	}
 	defer zf.Close()
-
-	archive := zip.NewWriter(zf)
-	defer archive.Close()
+	gz := gzip.NewWriter(zf)
+	defer gz.Close()
+	ta := tar.NewWriter(gz)
+	defer ta.Close()
 
 	info, err := os.Stat(dir)
 	if err != nil {
@@ -130,33 +133,41 @@ func compress(dir string, file string) (err error) {
 			return err
 		}
 
-		header, err := zip.FileInfoHeader(info)
+		header, err := tar.FileInfoHeader(info, path)
 		if err != nil {
 			return err
 		}
+		header.Name = path
 
-		header.Name = info.Name()
-		header.Method = zip.Deflate
-
-		w, err := archive.CreateHeader(header)
-		if err != nil {
+		if err := ta.WriteHeader(header); err != nil {
 			return err
 		}
 
-		f, err := os.Open(path)
+		co, err := os.Open(path)
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer co.Close()
 
-		_, err = io.Copy(w, f)
+		_, err = io.Copy(ta, co)
+
 		return err
 	})
 	return
 }
 
-func uncompress() {
+func uncompress(file string, dir string) (err error) {
 	// TODO: implement
+	f, err := os.OpenFile(file, os.O_CREATE|os.O_RDWR, os.FileMode(600))
+	if err != nil {
+		return err
+	}
+	var r bytes.Reader
+	if _, err = io.Copy(f, &r); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 //----  AWS S3  ----
