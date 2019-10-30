@@ -2,7 +2,6 @@ package main
 
 import (
 	"archive/tar"
-	"bytes"
 	"compress/gzip"
 	"fmt"
 	"github.com/aws/aws-sdk-go/aws"
@@ -35,6 +34,7 @@ type AwsConfig struct {
 func main() {
 
 	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/ccc.tar.gz")
+	uncompress("/Users/ymatzki/Downloads/ccc.tar.gz", "/Users/ymatzki/Downloads/compress")
 
 	/**
 	* TODO: Delete comment out afeter implement function to compress directory
@@ -110,8 +110,10 @@ func compress(dir string, file string) (err error) {
 		return err
 	}
 	defer zf.Close()
+
 	gz := gzip.NewWriter(zf)
 	defer gz.Close()
+
 	ta := tar.NewWriter(gz)
 	defer ta.Close()
 
@@ -137,7 +139,8 @@ func compress(dir string, file string) (err error) {
 		if err != nil {
 			return err
 		}
-		header.Name = path
+
+		header.Name = filepath.Base(path)
 
 		if err := ta.WriteHeader(header); err != nil {
 			return err
@@ -158,15 +161,61 @@ func compress(dir string, file string) (err error) {
 
 func uncompress(file string, dir string) (err error) {
 	// TODO: implement
-	f, err := os.OpenFile(file, os.O_CREATE|os.O_RDWR, os.FileMode(600))
+	co, err := os.OpenFile(file, os.O_CREATE|os.O_RDWR, os.FileMode(600))
 	if err != nil {
 		return err
 	}
-	var r bytes.Reader
-	if _, err = io.Copy(f, &r); err != nil {
+
+	gz, err := gzip.NewReader(co)
+	if err != nil {
 		return err
 	}
 
+	tr := tar.NewReader(gz)
+
+	info, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not directory.", dir)
+	}
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return err
+		}
+
+		co := filepath.Join(dir, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			_, err = os.Stat(co)
+			if os.IsNotExist(err) {
+				// create directory
+				err = os.MkdirAll(co, 0755)
+				if err != nil {
+					return err
+				}
+			}
+		case tar.TypeReg:
+			w, err := os.OpenFile(co, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(w, tr)
+			if err != nil {
+				return err
+			}
+			defer w.Close()
+		}
+	}
 	return nil
 }
 
