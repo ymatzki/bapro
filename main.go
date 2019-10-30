@@ -21,6 +21,7 @@ import (
 
 const (
 	generation = 3
+	waitSecond = 3
 )
 
 type AwsConfig struct {
@@ -32,50 +33,17 @@ type AwsConfig struct {
 }
 
 func main() {
-
-	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/ccc.tar.gz")
 	uncompress("/Users/ymatzki/Downloads/ccc.tar.gz", "/Users/ymatzki/Downloads/compress")
 
-	/**
-	* TODO: Delete comment out afeter implement function to compress directory
-	sigs := make(chan os.Signal, 1)
-	done := make(chan bool, 1)
-
-	go gracefulShutdown(sigs, done)
-	go checkPath("/tmp/path")
-
-	fmt.Println("Start Bapro")
-	<-done
-	*/
-
-	/**
-	* TODO: Delete comment out after implement function to export snapshot
-	awsConfig := &AwsConfig{
-		os.Getenv("AWS_ACCESS_KEY_ID"),
-		os.Getenv("AWS_SECRET_ACCESS_KEY"),
-		os.Getenv("AWS_SESSION_TOKEN"),
-		os.Getenv("AWS_DEFAULT_REGION"),
-		os.Getenv("AWS_DEFAULT_BUCKET"),
-	}
-
-	// Upload snapshot
-	upload("1572011713.txt", awsConfig)
-
-	// Delete old snapshot
-	targets, err := list(awsConfig)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	deleteTargets := listDeleteTargets(targets)
-
-	if len(deleteTargets) < 1 {
-		fmt.Println("no delete targets")
-		return
-	}
-	delete(deleteTargets, awsConfig)
-	*/
+	// TODO: Delete comment out after implemented
+	//sigs := make(chan os.Signal, 1)
+	//done := make(chan bool, 1)
+	//
+	//go gracefulShutdown(sigs, done)
+	//go checkPath("/tmp/path")
+	//
+	//fmt.Println("Start Bapro")
+	//<-done
 }
 
 // TODO: implement function import snapshot
@@ -95,10 +63,11 @@ func gracefulShutdown(sigs chan os.Signal, done chan bool) {
 
 func checkPath(path string) {
 	for {
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * waitSecond)
 		_, err := os.Stat(path)
 		if err == nil {
 			// TODO: export snapshot
+			handleUpdate(getAwsConfig(), path)
 			fmt.Printf("Directory or file [%s] exits.\n", path)
 		}
 	}
@@ -219,7 +188,38 @@ func uncompress(file string, dir string) (err error) {
 	return nil
 }
 
+func handleUpdate(config *AwsConfig, path string) {
+	// TODO: Get targets from snapshot path
+	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/ccc.tar.gz")
+	// Upload snapshot
+	upload("1572011713.txt", config)
+	// Delete old snapshot
+	targets, err := list(config)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	sortTargetsByTime(targets)
+	deleteTargets := targets[generation:len(targets)]
+	if len(deleteTargets) < 1 {
+		fmt.Println("no delete targets")
+		return
+	}
+	delete(deleteTargets, config)
+}
+
 //----  AWS S3  ----
+
+func getAwsConfig() *AwsConfig {
+	awsConfig := &AwsConfig{
+		os.Getenv("AWS_ACCESS_KEY_ID"),
+		os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		os.Getenv("AWS_SESSION_TOKEN"),
+		os.Getenv("AWS_DEFAULT_REGION"),
+		os.Getenv("AWS_DEFAULT_BUCKET"),
+	}
+	return awsConfig
+}
 
 func createCredentials(config *AwsConfig) (cred *credentials.Credentials) {
 	cred = credentials.NewStaticCredentials(
@@ -254,6 +254,10 @@ func upload(filename string, config *AwsConfig) error {
 
 	fmt.Printf("file uploaded to %s\n", aws.StringValue(&result.Location))
 	return nil
+}
+
+func download(targets []*s3.Object, config *AwsConfig) {
+
 }
 
 func delete(targets []*s3.Object, config *AwsConfig) error {
@@ -293,14 +297,6 @@ func delete(targets []*s3.Object, config *AwsConfig) error {
 	return nil
 }
 
-func listDeleteTargets(contents []*s3.Object) (targets []*s3.Object) {
-	sort.Slice(contents[:], func(i, j int) bool {
-		return contents[i].LastModified.Local().After(contents[j].LastModified.Local())
-	})
-
-	return contents[generation:len(contents)]
-}
-
 func list(config *AwsConfig) (contents []*s3.Object, err error) {
 	sess, err := session.NewSession(&aws.Config{
 		Credentials: createCredentials(config),
@@ -330,4 +326,11 @@ func list(config *AwsConfig) (contents []*s3.Object, err error) {
 	}
 
 	return result.Contents, nil
+}
+
+// Sort by time modified. Most recently modified first.
+func sortTargetsByTime(contents []*s3.Object) {
+	sort.Slice(contents[:], func(i, j int) bool {
+		return contents[i].LastModified.Local().After(contents[j].LastModified.Local())
+	})
 }
