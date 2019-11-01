@@ -26,7 +26,8 @@ type AwsConfig struct {
 }
 
 func main() {
-	uncompress("/Users/ymatzki/Downloads/ccc.tar.gz", "/Users/ymatzki/Downloads/compress")
+	//uncompress("/Users/ymatzki/Downloads/ccc.tar.gz", "/Users/ymatzki/Downloads/compress")
+
 
 	// TODO: Delete comment out after implemented
 	//sigs := make(chan os.Signal, 1)
@@ -55,12 +56,13 @@ func gracefulShutdown(sigs chan os.Signal, done chan bool) {
 }
 
 func checkPath(path string) {
+	config := getAwsConfig()
 	for {
 		time.Sleep(time.Second * waitSecond)
 		_, err := os.Stat(path)
 		if err == nil {
 			// TODO: export snapshot
-			handleUpdate(getAwsConfig(), path)
+			save(config, path)
 			fmt.Printf("Directory or file [%s] exits.\n", path)
 		}
 	}
@@ -181,7 +183,27 @@ func uncompress(file string, dir string) (err error) {
 	return nil
 }
 
-func handleUpdate(config *AwsConfig, path string) {
+func save(config *AwsConfig, path string) {
+	// TODO: Get targets from snapshot path
+	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/ccc.tar.gz")
+	// Upload snapshot
+	upload("1572011713.txt", config)
+	// Delete old snapshot
+	targets, err := list(config)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	sortTargetsByTime(targets)
+	deleteTargets := targets[generation:len(targets)]
+	if len(deleteTargets) < 1 {
+		fmt.Println("no delete targets")
+		return
+	}
+	delete(deleteTargets, config)
+}
+
+func load(config *AwsConfig, path string) {
 	// TODO: Get targets from snapshot path
 	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/ccc.tar.gz")
 	// Upload snapshot
