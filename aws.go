@@ -58,8 +58,29 @@ func upload(filename string, config *AwsConfig) error {
 	return nil
 }
 
-func download(targets []*s3.Object, config *AwsConfig) {
+func download(filename string, config *AwsConfig) error {
+	sess := session.Must(session.NewSession(&aws.Config{
+		Credentials: createCredentials(config),
+		Region:      aws.String(config.Region),
+	}))
 
+	downloader := s3manager.NewDownloader(sess)
+
+	f, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to open file %q, %v", filename, err)
+	}
+
+	result, err := downloader.Download(f, &s3.GetObjectInput{
+			Bucket: aws.String(config.Bucket),
+			Key:    aws.String(filename),
+		})
+	if err != nil {
+		return fmt.Errorf("failed to download file, %v", err)
+	}
+
+	fmt.Printf("file downloaded, %d bytes\n", result)
+	return nil
 }
 
 func delete(targets []*s3.Object, config *AwsConfig) error {
