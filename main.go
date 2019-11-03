@@ -27,7 +27,7 @@ type AwsConfig struct {
 
 func main() {
 	//uncompress("/Users/ymatzki/Downloads/ccc.tar.gz", "/Users/ymatzki/Downloads/compress")
-
+	load(getAwsConfig())
 
 	// TODO: Delete comment out after implemented
 	//sigs := make(chan os.Signal, 1)
@@ -40,7 +40,8 @@ func main() {
 	//<-done
 }
 
-// TODO: implement function import snapshot
+// TODO: implement
+
 
 func gracefulShutdown(sigs chan os.Signal, done chan bool) {
 	signal.Notify(sigs, syscall.SIGTERM)
@@ -203,22 +204,15 @@ func save(config *AwsConfig, path string) {
 	delete(deleteTargets, config)
 }
 
-func load(config *AwsConfig, path string) {
+func load(config *AwsConfig) {
 	// TODO: Get targets from snapshot path
-	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/ccc.tar.gz")
-	// Upload snapshot
-	upload("1572011713.txt", config)
-	// Delete old snapshot
 	targets, err := list(config)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 	sortTargetsByTime(targets)
-	deleteTargets := targets[generation:len(targets)]
-	if len(deleteTargets) < 1 {
-		fmt.Println("no delete targets")
-		return
-	}
-	delete(deleteTargets, config)
+	getTarget := targets[0]
+	download(*getTarget.Key, config)
+	uncompress(*getTarget.Key, "/Users/ymatzki/Downloads/compress")
 }
