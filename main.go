@@ -5,16 +5,24 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 const (
-	generation = 3
-	waitSecond = 3
+	generation       = 3
+	waitSecond       = 3
+	snapshotBasePath = "/snapshots"
+	suffix           = ".tar.gz"
 )
 
 type AwsConfig struct {
@@ -26,22 +34,57 @@ type AwsConfig struct {
 }
 
 func main() {
-	//uncompress("/Users/ymatzki/Downloads/ccc.tar.gz", "/Users/ymatzki/Downloads/compress")
-	load(getAwsConfig())
+	var isDaemon bool
+	var rootCmd = &cobra.Command{
+		Use:   "bapro [command]",
+		Short: "Export/Import prometheus snapshot data to remote object storage.",
+	}
+	var saveCmd = &cobra.Command{
+		Use:   "save [storage.tsdb.path]",
+		Short: "Export prometheus snapshot data to remote object storage.",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if isDaemon {
+				autoSave(args[0] + snapshotBasePath)
+				sigs := make(chan os.Signal, 1)
+				done := make(chan bool, 1)
 
-	// TODO: Delete comment out after implemented
-	//sigs := make(chan os.Signal, 1)
-	//done := make(chan bool, 1)
-	//
-	//go gracefulShutdown(sigs, done)
-	//go checkPath("/tmp/path")
-	//
-	//fmt.Println("Start Bapro")
-	//<-done
+				go gracefulShutdown(sigs, done)
+
+				fmt.Println("Start Bapro")
+				<-done
+				fmt.Println("End Bapro")
+			} else {
+				snapshotDataPath, err := getSnapshotDataPath(args[0] + snapshotBasePath)
+				if err != nil {
+					fmt.Errorf("file [%s] dose not exists", args[0]+snapshotBasePath)
+					panic(err)
+				}
+				save(snapshotDataPath)
+			}
+		},
+	}
+
+	var loadCmd = &cobra.Command{
+		Use:   "load",
+		Short: "Import prometheus snapshot data to remote object storage.",
+		Args:  nil,
+		Run: func(cmd *cobra.Command, args []string) {
+			load()
+		},
+	}
+
+	saveCmd.Flags().BoolVarP(
+		&isDaemon,
+		"daemon",
+		"d",
+		false,
+		`Watch specified directory indefinitely. If snapshot directory is created, 
+export to object storage.`,
+	)
+	rootCmd.AddCommand(saveCmd, loadCmd)
+	rootCmd.Execute()
 }
-
-// TODO: implement
-
 
 func gracefulShutdown(sigs chan os.Signal, done chan bool) {
 	signal.Notify(sigs, syscall.SIGTERM)
@@ -56,21 +99,22 @@ func gracefulShutdown(sigs chan os.Signal, done chan bool) {
 	done <- true
 }
 
-func checkPath(path string) {
-	config := getAwsConfig()
+func autoSave(path string) {
 	for {
-		time.Sleep(time.Second * waitSecond)
-		_, err := os.Stat(path)
-		if err == nil {
-			// TODO: export snapshot
-			save(config, path)
-			fmt.Printf("Directory or file [%s] exits.\n", path)
+		snapshotDataPath, err := getSnapshotDataPath(path)
+		if err != nil {
+			continue
 		}
+		time.Sleep(time.Second * waitSecond)
+		save(snapshotDataPath)
+		fmt.Printf("Directory or file [%s] exits.\n", snapshotDataPath)
 	}
 }
 
 func compress(dir string, file string) (err error) {
-	zf, err := os.Create(file)
+	baseDir := path.Dir(dir)
+	zf, err := os.Create(strings.TrimLeft(file, baseDir))
+	//zf, err := os.Create(file)
 	if err != nil {
 		return err
 	}
@@ -100,12 +144,14 @@ func compress(dir string, file string) (err error) {
 			return err
 		}
 
-		header, err := tar.FileInfoHeader(info, path)
+		fineName := strings.TrimLeft(path, baseDir)
+
+		header, err := tar.FileInfoHeader(info, fineName)
 		if err != nil {
 			return err
 		}
 
-		header.Name = filepath.Base(path)
+		header.Name = filepath.ToSlash(fineName)
 
 		if err := ta.WriteHeader(header); err != nil {
 			return err
@@ -118,31 +164,26 @@ func compress(dir string, file string) (err error) {
 		defer co.Close()
 
 		_, err = io.Copy(ta, co)
-
 		return err
 	})
 	return
 }
 
 func uncompress(file string, dir string) (err error) {
-	// TODO: implement
 	co, err := os.OpenFile(file, os.O_CREATE|os.O_RDWR, os.FileMode(600))
 	if err != nil {
 		return err
 	}
-
 	gz, err := gzip.NewReader(co)
 	if err != nil {
 		return err
 	}
-
 	tr := tar.NewReader(gz)
 
 	info, err := os.Stat(dir)
 	if err != nil {
 		return err
 	}
-
 	if !info.IsDir() {
 		return fmt.Errorf("%s is not directory.", dir)
 	}
@@ -163,6 +204,7 @@ func uncompress(file string, dir string) (err error) {
 		case tar.TypeDir:
 			_, err = os.Stat(co)
 			if os.IsNotExist(err) {
+				fmt.Printf("create dir %s\n", co)
 				// create directory
 				err = os.MkdirAll(co, 0755)
 				if err != nil {
@@ -170,49 +212,105 @@ func uncompress(file string, dir string) (err error) {
 				}
 			}
 		case tar.TypeReg:
+			err = os.MkdirAll(path.Dir(co), 0755)
+			if err != nil {
+				return err
+			}
 			w, err := os.OpenFile(co, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				return err
 			}
+
 			_, err = io.Copy(w, tr)
 			if err != nil {
 				return err
 			}
+
 			defer w.Close()
 		}
 	}
 	return nil
 }
 
-func save(config *AwsConfig, path string) {
-	// TODO: Get targets from snapshot path
-	compress("/tmp/prometheus/snapshot/3235", "/Users/ymatzki/Downloads/ccc.tar.gz")
+func save(path string) {
+	// TODO: Select object storage
+	//config := getAwsConfig()
+	compress(path, filepath.Base(path+suffix))
+	clean(path)
+
 	// Upload snapshot
-	upload("1572011713.txt", config)
-	// Delete old snapshot
-	targets, err := list(config)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	sortTargetsByTime(targets)
-	deleteTargets := targets[generation:len(targets)]
-	if len(deleteTargets) < 1 {
-		fmt.Println("no delete targets")
-		return
-	}
-	delete(deleteTargets, config)
+	//upload(path+suffix, config)
+	//// Delete old snapshot
+	//targets, err := list(config)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//sortTargetsByTime(targets)
+	//deleteTargets := targets[generation:len(targets)]
+	//if len(deleteTargets) < 1 {
+	//	fmt.Println("no delete targets")
+	//	return
+	//}
+	//delete(deleteTargets, config)
 }
 
-func load(config *AwsConfig) {
-	// TODO: Get targets from snapshot path
-	targets, err := list(config)
+func load() {
+	//// TODO: Select object storage
+	//config := getAwsConfig()
+	//// TODO: Get targets from snapshot path
+	//targets, err := list(config)
+	//if err != nil {
+	//	fmt.Println(err)
+	//	return
+	//}
+	//sortTargetsByTime(targets)
+	//getTarget := targets[0]
+	//download(*getTarget.Key, config)
+	//uncompress(*getTarget.Key, "/Users/ymatzki/Downloads/compress")
+	file := "/Users/ymatzki/work/gopath/src/github.com/ymatzki/Bapro/20191104T133551Z-866cb397916001e.tar.gz"
+	uncompress(file, "/tmp/unzip")
+	install("/tmp/unzip/"+strings.TrimRight(path.Base(file), suffix), "/tmp/prometheus/")
+}
+
+func getSnapshotDataPath(path string) (snapshotDataPath string, err error) {
+	_, err = os.Stat(path)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return "", err
 	}
-	sortTargetsByTime(targets)
-	getTarget := targets[0]
-	download(*getTarget.Key, config)
-	uncompress(*getTarget.Key, "/Users/ymatzki/Downloads/compress")
+
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		return "", err
+	}
+
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].ModTime().Before(files[j].ModTime())
+	})
+
+	if len(files) > 0 {
+		return path + "/" + files[0].Name(), nil
+	} else {
+		return "", fmt.Errorf("file dose not exist.")
+	}
+
+}
+
+func clean(path string) (err error) {
+	return os.RemoveAll(path)
+}
+
+func install(snapshots string, dir string) (err error) {
+	files, err := ioutil.ReadDir(snapshots)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		err = os.Rename(snapshots+"/"+file.Name(), dir+"/"+file.Name())
+		if err !=nil {
+			return err
+		}
+	}
+	return nil
 }
