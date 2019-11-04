@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"log"
 	"os"
 	"sort"
 )
@@ -36,9 +37,7 @@ func upload(filename string, config *AwsConfig) error {
 		Credentials: createCredentials(config),
 		Region:      aws.String(config.Region),
 	}))
-
 	uploader := s3manager.NewUploader(sess)
-
 	f, err := os.Open(filename)
 	if err != nil {
 		return fmt.Errorf("failed to open file %q, %v", filename, err)
@@ -54,7 +53,7 @@ func upload(filename string, config *AwsConfig) error {
 		return fmt.Errorf("failed to upload file, %v", err)
 	}
 
-	fmt.Printf("file uploaded to %s\n", aws.StringValue(&result.Location))
+	log.Printf("file uploaded to %s\n", aws.StringValue(&result.Location))
 	return nil
 }
 
@@ -72,14 +71,14 @@ func download(filename string, config *AwsConfig) error {
 	}
 
 	result, err := downloader.Download(f, &s3.GetObjectInput{
-			Bucket: aws.String(config.Bucket),
-			Key:    aws.String(filename),
-		})
+		Bucket: aws.String(config.Bucket),
+		Key:    aws.String(filename),
+	})
 	if err != nil {
 		return fmt.Errorf("failed to download file, %v", err)
 	}
 
-	fmt.Printf("file downloaded, %d bytes\n", result)
+	log.Printf("file downloaded, %d bytes\n", result)
 	return nil
 }
 
@@ -116,7 +115,9 @@ func delete(targets []*s3.Object, config *AwsConfig) error {
 		return fmt.Errorf(err.Error())
 	}
 
-	fmt.Println(result)
+	for _, v := range result.Deleted {
+		log.Printf("Delete file [%s]", *v.Key)
+	}
 	return nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/signal"
 	"path"
@@ -46,14 +47,13 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			if isDaemon {
 				autoSave(args[0] + snapshotBasePath)
+
 				sigs := make(chan os.Signal, 1)
 				done := make(chan bool, 1)
-
 				go gracefulShutdown(sigs, done)
-
-				fmt.Println("Start Bapro")
+				log.Println("Start Bapro")
 				<-done
-				fmt.Println("End Bapro")
+				log.Println("End Bapro")
 			} else {
 				snapshotDataPath, err := getSnapshotDataPath(args[0] + snapshotBasePath)
 				if err != nil {
@@ -68,9 +68,9 @@ func main() {
 	var loadCmd = &cobra.Command{
 		Use:   "load",
 		Short: "Import prometheus snapshot data to remote object storage.",
-		Args:  nil,
+		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			load()
+			load(args[0])
 		},
 	}
 
@@ -91,11 +91,11 @@ func gracefulShutdown(sigs chan os.Signal, done chan bool) {
 	sig := <-sigs
 	switch sig.String() {
 	case syscall.SIGTERM.String():
-		fmt.Println("graceful shutdown...")
+		log.Println("graceful shutdown...")
 		// TODO: decide appropriate sleep second
 		time.Sleep(5 * time.Second)
 	}
-	fmt.Printf("Get signal: %s\n", sig.String())
+	log.Printf("Get signal: %s\n", sig.String())
 	done <- true
 }
 
@@ -107,14 +107,12 @@ func autoSave(path string) {
 		}
 		time.Sleep(time.Second * waitSecond)
 		save(snapshotDataPath)
-		fmt.Printf("Directory or file [%s] exits.\n", snapshotDataPath)
 	}
 }
 
 func compress(dir string, file string) (err error) {
 	baseDir := path.Dir(dir)
 	zf, err := os.Create(strings.TrimLeft(file, baseDir))
-	//zf, err := os.Create(file)
 	if err != nil {
 		return err
 	}
@@ -204,7 +202,7 @@ func uncompress(file string, dir string) (err error) {
 		case tar.TypeDir:
 			_, err = os.Stat(co)
 			if os.IsNotExist(err) {
-				fmt.Printf("create dir %s\n", co)
+				log.Printf("create dir %s\n", co)
 				// create directory
 				err = os.MkdirAll(co, 0755)
 				if err != nil {
@@ -234,43 +232,46 @@ func uncompress(file string, dir string) (err error) {
 
 func save(path string) {
 	// TODO: Select object storage
-	//config := getAwsConfig()
-	compress(path, filepath.Base(path+suffix))
-	clean(path)
+	config := getAwsConfig()
+	fileName := filepath.Base(path+suffix)
+	compress(path, fileName)
 
 	// Upload snapshot
-	//upload(path+suffix, config)
-	//// Delete old snapshot
-	//targets, err := list(config)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//sortTargetsByTime(targets)
-	//deleteTargets := targets[generation:len(targets)]
-	//if len(deleteTargets) < 1 {
-	//	fmt.Println("no delete targets")
-	//	return
-	//}
-	//delete(deleteTargets, config)
+	if err := upload(fileName, config); err != nil {
+		log.Fatalf(err.Error())
+	}
+
+	clean(path)
+	clean(fileName)
+	// Delete old snapshot
+	targets, err := list(config)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	sortTargetsByTime(targets)
+	deleteTargets := targets[generation:len(targets)]
+	if len(deleteTargets) < 1 {
+		log.Println("no delete targets")
+		return
+	}
+	delete(deleteTargets, config)
 }
 
-func load() {
-	//// TODO: Select object storage
-	//config := getAwsConfig()
-	//// TODO: Get targets from snapshot path
-	//targets, err := list(config)
-	//if err != nil {
-	//	fmt.Println(err)
-	//	return
-	//}
-	//sortTargetsByTime(targets)
-	//getTarget := targets[0]
-	//download(*getTarget.Key, config)
-	//uncompress(*getTarget.Key, "/Users/ymatzki/Downloads/compress")
-	file := "/Users/ymatzki/work/gopath/src/github.com/ymatzki/Bapro/20191104T133551Z-866cb397916001e.tar.gz"
-	uncompress(file, "/tmp/unzip")
-	install("/tmp/unzip/"+strings.TrimRight(path.Base(file), suffix), "/tmp/prometheus/")
+func load(path string) {
+	// TODO: Select object storage
+	config := getAwsConfig()
+	targets, err := list(config)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	sortTargetsByTime(targets)
+	getTarget := targets[0]
+	download(*getTarget.Key, config)
+	uncompress(*getTarget.Key, "./")
+	install(strings.TrimRight(*getTarget.Key, suffix), path)
+	clean(*getTarget.Key)
 }
 
 func getSnapshotDataPath(path string) (snapshotDataPath string, err error) {
@@ -308,7 +309,7 @@ func install(snapshots string, dir string) (err error) {
 
 	for _, file := range files {
 		err = os.Rename(snapshots+"/"+file.Name(), dir+"/"+file.Name())
-		if err !=nil {
+		if err != nil {
 			return err
 		}
 	}
