@@ -11,6 +11,6 @@ jobs:
       env:
         DOCKERHUB_USER: ${{ secrets.dockerhub_user }}
         DOCKERHUB_PASS: ${{ secrets.dockerhub_pass }}
-      run: docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PASS
+      run: docker login -u $DOCKERHUB_USER --password-stdin $DOCKERHUB_PASS
     - name: Push the Docker Image
       run: docker push ymatzki/bapro:${{ github.sha }}
