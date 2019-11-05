@@ -13,7 +13,7 @@ spec:
   replicas: 1
   podManagementPolicy: "Parallel"
   updateStrategy:
-   type: "RollingUpdate"
+    type: "RollingUpdate"
   selector:
     matchLabels:
       k8s-app: prometheus
@@ -25,14 +25,14 @@ spec:
       priorityClassName: system-cluster-critical
       serviceAccountName: prometheus
       initContainers:
-      - name: "init-chown-data"
-        image: "busybox:latest"
-        imagePullPolicy: "IfNotPresent"
-        command: ["chown", "-R", "65534:65534", "/data"]
-        volumeMounts:
-        - name: prometheus-data
-          mountPath: /data
-          subPath: ""
+        - name: "init-chown-data"
+          image: "busybox:latest"
+          imagePullPolicy: "IfNotPresent"
+          command: ["chown", "-R", "65534:65534", "/data"]
+          volumeMounts:
+            - name: prometheus-data
+              mountPath: /data
+              subPath: ""
       containers:
         - name: prometheus-server-configmap-reload
           image: "jimmidyson/configmap-reload:v0.1"
@@ -97,12 +97,12 @@ spec:
           configMap:
             name: prometheus-config
   volumeClaimTemplates:
-  - metadata:
-      name: prometheus-data
-    spec:
-      storageClassName: standard
-      accessModes:
-        - ReadWriteOnce
-      resources:
-        requests:
-          storage: "16Gi"
+    - metadata:
+        name: prometheus-data
+      spec:
+        storageClassName: standard
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: "16Gi"

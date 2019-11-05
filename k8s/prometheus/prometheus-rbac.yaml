@@ -50,6 +50,6 @@ roleRef:
   kind: ClusterRole
   name: prometheus
 subjects:
-- kind: ServiceAccount
-  name: prometheus
-  namespace: kube-system
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: kube-system
