@@ -1,14 +1,16 @@
-name: Docker Image CI
-
+name: Build and Push Docker Image
 on: [push]
-
 jobs:
-
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v1
     - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag bapro:$(date +%s)
+      run: docker build . --file Dockerfile --tag ymatzki/bapro:${{ github.sha }}
+    - name: Login Docker Hub
+      env:
+        DOCKERHUB_USER: ${{ secrets.dockerhub_user }}
+        DOCKERHUB_PASS: ${{ secrets.dockerhub_pass }}
+      run: docker login -u $DOCKERHUB_USER -p $DOCKERHUB_PASS
+    - name: Push the Docker image
+      run: docker push ymatzki/bapro:${{ github.sha }}
