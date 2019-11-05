@@ -1,7 +1,28 @@
 # Bapro
+
 Bapro(back prometheus) provides following feature.
 - Export prometheus snapshot data to remote object storage.
 - Import prometheus snapshot data from remote object storage.
+
+### Usage
+
+```
+$ bapro
+Export/Import prometheus snapshot data to remote object storage.
+
+Usage:
+  bapro [command]
+
+Available Commands:
+  help        Help about any command
+  load        Import prometheus snapshot data to remote object storage.
+  save        Export prometheus snapshot data to remote object storage.
+
+Flags:
+  -h, --help   help for bapro
+
+Use "bapro [command] --help" for more information about a command.
+```
 
 ### Reference
 
