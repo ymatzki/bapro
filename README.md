@@ -1,6 +1,6 @@
 # Bapro
 
-Bapro(back prometheus) provides following feature.
+Bapro(backup prometheus) provides following feature.
 - Export prometheus snapshot data to remote object storage.
 - Import prometheus snapshot data from remote object storage.
 
