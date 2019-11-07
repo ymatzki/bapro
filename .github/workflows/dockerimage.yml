@@ -4,13 +4,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - name: Build the Docker Image
-      run: docker build . --file Dockerfile --tag ymatzki/bapro:${{ github.sha }}
-    - name: Login Docker Hub
-      env:
-        DOCKERHUB_USER: ${{ secrets.dockerhub_user }}
-        DOCKERHUB_PASS: ${{ secrets.dockerhub_pass }}
-      run: docker login -u $DOCKERHUB_USER --password-stdin $DOCKERHUB_PASS
-    - name: Push the Docker Image
-      run: docker push ymatzki/bapro:${{ github.sha }}
+      - uses: actions/checkout@v1
+      - name: Build the Docker Image
+        run: docker build . --file Dockerfile --tag ymatzki/bapro:${{ github.sha }}
+      - name: Login Docker Hub
+        env:
+          DOCKERHUB_USER: ${{ secrets.dockerhub_user }}
+          DOCKERHUB_PASS: ${{ secrets.dockerhub_pass }}
+        run: docker login -u $DOCKERHUB_USER --password-stdin $DOCKERHUB_PASS
+      - name: Push the Docker Image
+        run: docker push ymatzki/bapro:${{ github.sha }}
