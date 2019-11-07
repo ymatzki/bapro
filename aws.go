@@ -13,6 +13,14 @@ import (
 	"sort"
 )
 
+type AwsConfig struct {
+	AccessKeyID     string
+	SecretAccessKey string
+	SessionToken    string
+	Region          string
+	Bucket          string
+}
+
 func getAwsConfig() *AwsConfig {
 	awsConfig := &AwsConfig{
 		os.Getenv("AWS_ACCESS_KEY_ID"),

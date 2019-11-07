@@ -20,14 +20,6 @@ const (
 	workDir          = "./"
 )
 
-type AwsConfig struct {
-	AccessKeyID     string
-	SecretAccessKey string
-	SessionToken    string
-	Region          string
-	Bucket          string
-}
-
 func main() {
 	var isDaemon bool
 	var rootCmd = &cobra.Command{
