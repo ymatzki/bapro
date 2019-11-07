@@ -13,7 +13,7 @@ import (
 	"sort"
 )
 
-type AwsConfig struct {
+type AwsEnv struct {
 	AccessKeyID     string
 	SecretAccessKey string
 	SessionToken    string
@@ -21,8 +21,8 @@ type AwsConfig struct {
 	Bucket          string
 }
 
-func getAwsConfig() *AwsConfig {
-	awsConfig := &AwsConfig{
+func getAwsEnv() *AwsEnv {
+	awsConfig := &AwsEnv{
 		os.Getenv("AWS_ACCESS_KEY_ID"),
 		os.Getenv("AWS_SECRET_ACCESS_KEY"),
 		os.Getenv("AWS_SESSION_TOKEN"),
@@ -32,7 +32,7 @@ func getAwsConfig() *AwsConfig {
 	return awsConfig
 }
 
-func createCredentials(config *AwsConfig) (cred *credentials.Credentials) {
+func createCredentials(config *AwsEnv) (cred *credentials.Credentials) {
 	cred = credentials.NewStaticCredentials(
 		config.AccessKeyID,
 		config.SecretAccessKey,
@@ -40,11 +40,15 @@ func createCredentials(config *AwsConfig) (cred *credentials.Credentials) {
 	return
 }
 
-func upload(filename string, config *AwsConfig) error {
-	sess := session.Must(session.NewSession(&aws.Config{
+func createAwsConfig(config *AwsEnv) *aws.Config {
+	return &aws.Config{
 		Credentials: createCredentials(config),
 		Region:      aws.String(config.Region),
-	}))
+	}
+}
+
+func upload(filename string, config *AwsEnv) error {
+	sess := session.Must(session.NewSession(createAwsConfig(config)))
 	uploader := s3manager.NewUploader(sess)
 	f, err := os.Open(filename)
 	if err != nil {
@@ -65,11 +69,8 @@ func upload(filename string, config *AwsConfig) error {
 	return nil
 }
 
-func download(filename string, config *AwsConfig) error {
-	sess := session.Must(session.NewSession(&aws.Config{
-		Credentials: createCredentials(config),
-		Region:      aws.String(config.Region),
-	}))
+func download(filename string, config *AwsEnv) error {
+	sess := session.Must(session.NewSession(createAwsConfig(config)))
 
 	downloader := s3manager.NewDownloader(sess)
 
@@ -90,12 +91,9 @@ func download(filename string, config *AwsConfig) error {
 	return nil
 }
 
-func delete(targets []*s3.Object, config *AwsConfig) error {
+func delete(targets []*s3.Object, config *AwsEnv) error {
 
-	sess, err := session.NewSession(&aws.Config{
-		Credentials: createCredentials(config),
-		Region:      aws.String(config.Region),
-	})
+	sess, err := session.NewSession(createAwsConfig(config))
 	if err != nil {
 		return fmt.Errorf(err.Error())
 	}
@@ -129,11 +127,8 @@ func delete(targets []*s3.Object, config *AwsConfig) error {
 	return nil
 }
 
-func list(config *AwsConfig) (contents []*s3.Object, err error) {
-	sess, err := session.NewSession(&aws.Config{
-		Credentials: createCredentials(config),
-		Region:      aws.String(config.Region),
-	})
+func list(config *AwsEnv) (contents []*s3.Object, err error) {
+	sess, err := session.NewSession(createAwsConfig(config))
 	if err != nil {
 		return nil, fmt.Errorf(err.Error())
 	}

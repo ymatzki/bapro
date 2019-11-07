@@ -87,7 +87,7 @@ func autoSave(path string) {
 
 func save(path string) {
 	// TODO: Select object storage
-	config := getAwsConfig()
+	config := getAwsEnv()
 	fileName := filepath.Base(path + suffix)
 	compress(path, fileName)
 
@@ -119,7 +119,7 @@ func save(path string) {
 
 func load(path string) {
 	// TODO: Select object storage
-	config := getAwsConfig()
+	config := getAwsEnv()
 
 	// Download latest file from object storage
 	targets, err := list(config)
