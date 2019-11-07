@@ -107,12 +107,14 @@ func save(path string) {
 		return
 	}
 	sortTargetsByTime(targets)
-	deleteTargets := targets[generation:len(targets)]
-	if len(deleteTargets) < 1 {
-		log.Println("no delete targets")
-		return
+	if generation < len(targets) {
+		deleteTargets := targets[generation:len(targets)]
+		if len(deleteTargets) < 1 {
+			log.Println("no delete targets")
+			return
+		}
+		delete(deleteTargets, config)
 	}
-	delete(deleteTargets, config)
 }
 
 func load(path string) {
