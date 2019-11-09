@@ -127,12 +127,15 @@ func load(path string) {
 		log.Println(err)
 		return
 	}
-	sortTargetsByTime(targets)
-	getTarget := targets[0]
-	download(*getTarget.Key, config)
-	uncompress(*getTarget.Key, workDir)
-	install(strings.TrimRight(*getTarget.Key, suffix), path)
-	clean(*getTarget.Key)
+
+	if len(targets) > 0 {
+		sortTargetsByTime(targets)
+		getTarget := targets[0]
+		download(*getTarget.Key, config)
+		uncompress(*getTarget.Key, workDir)
+		install(strings.TrimRight(*getTarget.Key, suffix), path)
+		clean(*getTarget.Key)
+	}
 }
 
 func getSnapshotDataPath(path string) (snapshotDataPath string, err error) {
